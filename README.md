@@ -2,6 +2,12 @@
 
 Special version of the Fobos SDR receiver host software API shared library. Lightweight and easy to start. Full source code. Allpication examples.
 
+## Hardware support
+
+- hw.rev 2.x with special firmware loaded
+- hw.rev 3.x with special firmware loaded
+- hw.rev 4.x and higher native support
+
 ## Features
 
 - slightly different enumeration, control and streaming concept
