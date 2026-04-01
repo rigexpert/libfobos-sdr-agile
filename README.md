@@ -17,7 +17,7 @@ Special version of the Fobos SDR receiver host software API shared library. Ligh
 
 ## Limitations
 
-- special firmware required
+- special firmware required for hw.rev 3.x and earlier
 
 ## Versions
 
