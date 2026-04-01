@@ -4,18 +4,20 @@
 //  V.T.
 //  LGPL-2.1+
 //  2024.12.07
+//  2026.03.12
 //==============================================================================
 #include <stdio.h>
 #ifdef _WIN32
 #include <Windows.h>
 #endif
 #include <string.h>
-#include <fobos_sdr.h>
+//#include <fobos_sdr.h>
+#include <fobos/fobos_sdr.h>
 #include <wav/wav_file.h>
 //==============================================================================
 typedef struct scan_ctx_t
 {
-    struct wav_file_t * wav;
+    struct wav_file_t * wavs[FOBOS_MAX_FREQS_CNT];
     int channels_count;
     int split_channels;
     int skip_tuning;
@@ -28,8 +30,11 @@ void read_samples_callback(float *buf, uint32_t buf_length, struct fobos_sdr_dev
     struct scan_ctx_t * scan = (struct scan_ctx_t *)user;
     scan->buff_count++;
 
-    printf("+");
-    fflush(stdout);
+    if (scan->buff_count % 256 == 0)
+    {
+        printf("+");
+        fflush(stdout);
+    }
     
     if (scan->buff_count >= scan->max_buff_count)
     {
@@ -57,8 +62,8 @@ void read_samples_callback(float *buf, uint32_t buf_length, struct fobos_sdr_dev
         }
         else
         {
-            // select the scan->wav[channel] to write to
-            wav = scan->wav + channel;
+            // select the scan->wavs[channel] to write to
+            wav = scan->wavs + channel;
         }
     }
     else
@@ -70,7 +75,7 @@ void read_samples_callback(float *buf, uint32_t buf_length, struct fobos_sdr_dev
         else
         {
             // select the one file
-            wav = scan->wav;
+            wav = scan->wavs[0];
         }
     }
 
@@ -140,8 +145,11 @@ void test_scanner(void)
             printf("test: streaming\n");
             double frequency = 100000000.0;   // Hz
             double samplerate = 25000000.0;   // samples per second
-            unsigned int direct_sampling = 0; // 0 - RF, 1 - HF1+HF2
-            unsigned int lna_gain = 0;        // ow noise amplifier 0..2
+            //double samplerate = 50000000.0;   // samples per second
+            //double samplerate = 64000000.0;   // samples per second
+            double auto_bandwidth = 0.8;      // bandwidth relative to sample rate
+            unsigned int direct_sampling = 0; // 0 - RF, do not use 1 - HF1+HF2 when scanning
+            unsigned int lna_gain = 0;        // low noise amplifier 0..2
             unsigned int vga_gain = 0;        // variable gain amplifier 0..15
             unsigned int clk_source = 0;      // 0 - internal clock (default); 1 - external
 
@@ -168,11 +176,16 @@ void test_scanner(void)
             {
                 printf("fobos_sdr_set_vga_gain - error!\n");
             }
-
             result = fobos_sdr_set_samplerate(dev, samplerate);
             if (result != 0)
             {
                 printf("fobos_sdr_set_samplerate - error!\n");
+            }
+
+            result = fobos_sdr_set_auto_bandwidth(dev, auto_bandwidth);
+            if (result != 0)
+            {
+                printf("fobos_sdr_set_auto_bandwidth - error!\n");
             }
 
             result = fobos_sdr_set_clk_source(dev, clk_source);
@@ -222,26 +235,53 @@ void test_scanner(void)
             // some scanning context 
             // - depending on the user case
             // - this code is for a simple example
-            struct scan_ctx_t scan;
+            struct scan_ctx_t scan = { 0 };
             scan.buff_count = 0;
-            scan.max_buff_count = 128; // number of buffers to record
+            scan.max_buff_count = 1024 * 8; // number of buffers to record
             scan.channels_count = freqs_count;
-            scan.skip_tuning = 0;
-            scan.split_channels = 0;
+            scan.skip_tuning = 0;       // do not record while receiver being tunning
+            scan.split_channels = 0;    // record each channel into separate wav file
 
-            struct wav_file_t* wav = wav_file_create();
-            wav->channels_count = 2;
-            wav->sample_rate = (int)samplerate;
-            wav->bytes_per_sample = 4;   // record in native float32 format
-            wav->audio_format = 3;
-
-            const char* file_name = "scan.iq.wav";
-            result = wav_file_open(wav, file_name, "w");
-            if (result != 0)
+            if (scan.split_channels)
             {
-                printf("could not create file %s\n", file_name);
+                for (int i = 0; i < scan.channels_count; i++)
+                {
+                    struct wav_file_t* wav = wav_file_create();
+                    wav->channels_count = 2;
+                    wav->sample_rate = (int)samplerate;
+                    wav->bytes_per_sample = 4;   // record in native float32 format
+                    wav->audio_format = 3;
+
+                    char file_name[256];
+                    sprintf(file_name, "scan.ch%03d.iq.wav", i);
+                    //sprintf(file_name, "f:/rff/scan.ch%03d.iq.wav", i);
+
+                    result = wav_file_open(wav, file_name, "w");
+                    if (result != 0)
+                    {
+                        printf("could not create file %s\n", file_name);
+                    }
+                    scan.wavs[i] = wav;
+                }
             }
-            scan.wav = wav;
+            else
+            {
+                struct wav_file_t* wav = wav_file_create();
+                wav->channels_count = 2;
+                wav->sample_rate = (int)samplerate;
+                wav->bytes_per_sample = 4;   // record in native float32 format
+                wav->audio_format = 3;
+
+                const char* file_name = "scan.iq.wav";
+                //const char* file_name = "f:/rff/scan.iq.wav";
+
+                result = wav_file_open(wav, file_name, "w");
+                if (result != 0)
+                {
+                    printf("could not create file %s\n", file_name);
+                }
+                scan.wavs[0] = wav;
+            }
 
             // start the streaming in the usual way
             //  - async mode -> see read_samples_callback() implementation
@@ -265,8 +305,10 @@ void test_scanner(void)
 
             //=================================================================//
 
-            wav_file_destroy(wav);
-            wav = 0;
+            for (int i = 0; i < scan.channels_count; i++)
+            {
+                wav_file_destroy(scan.wavs[i]);
+            }
 
             fobos_sdr_close(dev);
         }

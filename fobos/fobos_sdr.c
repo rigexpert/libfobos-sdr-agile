@@ -12,6 +12,7 @@
 //  2025.01.29 - v.3.0.1 - fobos_sdr_reset(), fobos_sdr_read_firmware(), fobos_sdr_write_firmware
 //  2025.08.25 - v.3.1.0 - VGA gain fixed
 //  2025.10.23 - v.3.1.0 - new software DC filter
+//  2026.03.10 - v.3.3.0 - HW rev.4 support
 //==============================================================================
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
@@ -32,9 +33,10 @@
 #define printf_internal printf
 #endif // !printf_internal
 //==============================================================================
+
 //#define FOBOS_SDR_PRINT_DEBUG
 //==============================================================================
-#define LIB_VERSION "3.1.0 (agile)"
+#define LIB_VERSION "3.3.0 (agile)"
 #define DRV_VERSION "libusb"
 //==============================================================================
 #define FOBOS_VENDOR_ID         0x16d0
@@ -61,6 +63,7 @@
 #define FOBOS_MAX_BUF_COUNT     64
 #define FOBOS_MIN_BUF_LENGTH    8192
 #define FOBOS_DEF_BUF_LENGTH    65536
+#define FOBOS_USER_DATA_SIZE    256
 #define LIBUSB_BULK_TIMEOUT     0
 #define LIBUSB_BULK_IN_ENDPOINT 0x81
 #define LIBUSB_DDESCRIPTOR_LEN  64
@@ -276,99 +279,6 @@ int fobos_sdr_check(struct fobos_sdr_dev_t * dev)
 #define CTRLI       (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_IN)
 #define CTRLO       (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_OUT)
 #define CTRL_TIMEOUT    300
-void fobos_spi(struct fobos_sdr_dev_t * dev, uint8_t* tx, uint8_t* rx, uint16_t size)
-{
-    int result = fobos_sdr_check(dev);
-    uint16_t xsize = 0;
-    if (result == 0)
-    {
-        xsize += libusb_control_transfer(dev->libusb_devh, CTRLO, 0xE2, 1, 0, tx, size, CTRL_TIMEOUT);
-        xsize += libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE2, 1, 0, rx, size, CTRL_TIMEOUT);
-        if (xsize != size * 2)
-        {
-            result = FOBOS_ERR_CONTROL;
-        }
-    }
-    if (result != 0)
-    {
-        printf_internal("fobos_spi() err %d\n", result);
-    }
-}
-//==============================================================================
-void fobos_i2c_transfer(struct fobos_sdr_dev_t * dev, uint8_t address, uint8_t* tx_data, uint16_t tx_size, uint8_t* rx_data, uint16_t rx_size)
-{
-    uint8_t req_code = 0xE7;
-    int result = fobos_sdr_check(dev);
-    uint16_t xsize;
-    if (result == 0)
-    {
-        if ((tx_data != 0) && tx_size > 0)
-        {
-            xsize = libusb_control_transfer(dev->libusb_devh, CTRLO, req_code, address, 0, tx_data, tx_size, CTRL_TIMEOUT);
-            if (xsize != tx_size)
-            {
-                result = FOBOS_ERR_CONTROL;
-            }
-        }
-        if ((rx_data != 0) && rx_size > 0)
-        {
-            xsize = libusb_control_transfer(dev->libusb_devh, CTRLI, req_code, address, 0, rx_data, rx_size, CTRL_TIMEOUT);
-            if (xsize != tx_size)
-            {
-                result = FOBOS_ERR_CONTROL;
-            }
-        }
-    }
-    if (result != 0)
-    {
-        printf_internal("fobos_i2c_transfer() err %d\n", result);
-    }
-}
-//==============================================================================
-void fobos_i2c_write(struct fobos_sdr_dev_t * dev, uint8_t address, uint8_t* data, uint16_t size)
-{
-    uint8_t req_code = 0xE7;
-    int result = fobos_sdr_check(dev);
-    uint16_t xsize;
-    if (result == 0)
-    {
-        if ((data != 0) && (size > 0))
-        {
-            xsize = libusb_control_transfer(dev->libusb_devh, CTRLO, req_code, address, 0, data, size, CTRL_TIMEOUT);
-            if (xsize != size)
-            {
-                result = FOBOS_ERR_CONTROL;
-            }
-        }
-    }
-    if (result != 0)
-    {
-        printf_internal("fobos_i2c_write() err %d\n", result);
-    }
-}
-//==============================================================================
-void fobos_i2c_read(struct fobos_sdr_dev_t * dev, uint8_t address, uint8_t* data, uint16_t size)
-{
-    uint8_t req_code = 0xE7;
-    int result = fobos_sdr_check(dev);
-    uint16_t xsize;
-    if (result == 0)
-    {
-        if ((data != 0) && (size > 0))
-        {
-            xsize = libusb_control_transfer(dev->libusb_devh, CTRLI, req_code, address, 0, data, size, CTRL_TIMEOUT);
-            if (xsize != size)
-            {
-                result = FOBOS_ERR_CONTROL;
-            }
-        }
-    }
-    if (result != 0)
-    {
-        printf_internal("fobos_i2c_read() err %d\n", result);
-    }
-}
-//==============================================================================
 int fobos_sdr_fx3_cmd(struct fobos_sdr_dev_t * dev, uint8_t code, uint16_t value, uint16_t index)
 {
     int result = fobos_sdr_check(dev);
@@ -488,7 +398,7 @@ int fobos_sdr_open(struct fobos_sdr_dev_t ** out_dev, uint32_t index)
                 {
                     fobos_sdr_fx3_cmd(dev, FOBOS_SDR_CMD, CMD_OPEN, 0);
                     fobos_sdr_set_frequency(dev, 100E6);
-                    fobos_sdr_set_samplerate(dev, 10000000.0);
+                    fobos_sdr_set_samplerate(dev, 25000000.0);
                     fobos_sdr_set_auto_bandwidth(dev, 0.9);
                     return FOBOS_ERR_OK;
                 }
@@ -630,7 +540,7 @@ int fobos_sdr_start_scan(struct fobos_sdr_dev_t * dev, double *frequencies, unsi
 {
     int result = fobos_sdr_check(dev);
 #ifdef FOBOS_SDR_PRINT_DEBUG
-    printf_internal("%s( .. , %d, %d);\n", __FUNCTION__, count, samples_per_step);
+    printf_internal("%s( .. , %d, %d);\n", __FUNCTION__, count, count);
 #endif // FOBOS_SDR_PRINT_DEBUG    
     if (result != FOBOS_ERR_OK)
     {
@@ -653,7 +563,7 @@ int fobos_sdr_stop_scan(struct fobos_sdr_dev_t * dev)
 {
     int result = fobos_sdr_check(dev);
 #ifdef FOBOS_SDR_PRINT_DEBUG
-    printf_internal("%s(%f);\n", __FUNCTION__, value);
+    printf_internal("%s();\n", __FUNCTION__);
 #endif // FOBOS_SDR_PRINT_DEBUG    
     if (result != FOBOS_ERR_OK)
     {
@@ -789,8 +699,23 @@ int fobos_sdr_set_auto_bandwidth(struct fobos_sdr_dev_t * dev, double value)
     return result;
 }
 //==============================================================================
-const double fobos_sample_rates[] =
+const double fobos30_sample_rates[] =
 {
+    50000000.0,
+    40000000.0,
+    32000000.0,
+    25000000.0,
+    20000000.0,
+    16000000.0,
+    12500000.0,
+    10000000.0,
+    8000000.0
+};
+//==============================================================================
+const double fobos40_sample_rates[] =
+{
+    64000000.0,
+    58000000.0,
     50000000.0,
     40000000.0,
     32000000.0,
@@ -812,10 +737,21 @@ int fobos_sdr_get_samplerates(struct fobos_sdr_dev_t * dev, double * values, uns
     result = 0;
     if (count)
     {
-        *count = sizeof(fobos_sample_rates) / sizeof(fobos_sample_rates[0]);
-        if (values)
+        if ((dev->fw_version[0] == '2') || (dev->fw_version[0] == '3'))
         {
-            memcpy(values, fobos_sample_rates, sizeof(fobos_sample_rates));
+            *count = sizeof(fobos30_sample_rates) / sizeof(fobos30_sample_rates[0]);
+            if (values)
+            {
+                memcpy(values, fobos30_sample_rates, sizeof(fobos30_sample_rates));
+            }
+        }
+        if (dev->fw_version[0] == '4')
+        {
+            *count = sizeof(fobos40_sample_rates) / sizeof(fobos40_sample_rates[0]);
+            if (values)
+            {
+                memcpy(values, fobos40_sample_rates, sizeof(fobos40_sample_rates));
+            }
         }
     }
     return result;
@@ -852,7 +788,7 @@ int fobos_sdr_set_clk_source(struct fobos_sdr_dev_t * dev, int value)
 //==============================================================================
 void fobos_sdr_calibrate(struct fobos_sdr_dev_t * dev, void * data, size_t size)
 {
-    size_t complex_samples_count = size / 4;
+    size_t complex_samples_count = size / 4; 
     int16_t * psample = (int16_t *)data;
     int64_t summ_re = 0ll;
     int64_t summ_im = 0ll;
@@ -892,9 +828,9 @@ void fobos_sdr_calibrate(struct fobos_sdr_dev_t * dev, void * data, size_t size)
     {
         float ratio = dev->rx_avg_re / dev->rx_avg_im;
 #ifdef FOBOS_SDR_PRINT_DEBUG
-        if (dev->rx_buff_counter % 128 == 0)
+        if (dev->rx_buff_counter % 256 == 0)
         {
-            printf_internal("re/im scale = %f\n", ratio);
+            printf_internal("re/im scale = %f %d\n", ratio, dev->rx_buff_counter);
         }
 #endif // FOBOS_SDR_PRINT_DEBUG
         if ((ratio < 1.6f) && (ratio > 0.625f))
@@ -1192,12 +1128,15 @@ static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *transfer)
         if (transfer->actual_length == (int)dev->transfer_buf_size)
         {
             //printf_internal(".");
-            dev->rx_buff_counter++;
-            fobos_sdr_convert_all(dev, transfer->buffer, transfer->actual_length, dev->rx_buff);
-            size_t complex_samples_count = transfer->actual_length / 4;
-            if (dev->rx_cb)
+            if (FOBOS_CANCELING != dev->rx_async_status)
             {
-                dev->rx_cb(dev->rx_buff, complex_samples_count, dev, dev->rx_cb_usrer);
+                dev->rx_buff_counter++;
+                fobos_sdr_convert_all(dev, transfer->buffer, transfer->actual_length, dev->rx_buff);
+                size_t complex_samples_count = transfer->actual_length / 4;
+                if (dev->rx_cb)
+                {
+                    dev->rx_cb(dev->rx_buff, complex_samples_count, dev, dev->rx_cb_usrer);
+                }
             }
         }
         else
@@ -1233,7 +1172,7 @@ int fobos_sdr_read_async(struct fobos_sdr_dev_t * dev, fobos_sdr_cb_t cb, void *
     unsigned int i;
     int result = fobos_sdr_check(dev);
 #ifdef FOBOS_SDR_PRINT_DEBUG
-    printf_internal("%s(0x%08x, 0x%08x, 0x%08x, %d, %d)\n", __FUNCTION__, (unsigned int)dev, (unsigned int)cb, (unsigned int)ctx, buf_count, buf_length);
+    printf_internal("%s(0x%08x, 0x%08x, 0x%08x, %d, %d)\n", __FUNCTION__, (unsigned int)dev, (unsigned int)cb, (unsigned int)user, buf_count, buf_length);
 #endif // FOBOS_SDR_PRINT_DEBUG
     if (result != FOBOS_ERR_OK)
     {
@@ -1341,8 +1280,9 @@ int fobos_sdr_read_async(struct fobos_sdr_dev_t * dev, fobos_sdr_cb_t cb, void *
                     continue;
                 if (LIBUSB_TRANSFER_CANCELLED != dev->transfer[i]->status)
                 {
-                    //struct libusb_transfer * xf = dev->transfer[i];
-                    //printf_internal(" ~%08x", xf->flags);
+                    struct libusb_transfer * xf = dev->transfer[i];
+                    printf_internal(" ~%08x", xf->flags);
+                    
                     result = libusb_cancel_transfer(dev->transfer[i]);
                     libusb_handle_events_timeout_completed(dev->libusb_ctx, &tvx, NULL);
                     if (result < 0)
@@ -1417,7 +1357,6 @@ int fobos_sdr_start_sync(struct fobos_sdr_dev_t * dev, uint32_t buf_length)
         dev->rx_scan_active = 0;
     }
     buf_length = 4096 * dev->packs_per_transfer; // complex samples count
-    dev->rx_buff = (float*)malloc(buf_length * 2 * sizeof(float));
     dev->transfer_buf_size = buf_length * 4;
     dev->rx_sync_buf = (unsigned char *)malloc(dev->transfer_buf_size);
     if (dev->rx_sync_buf == 0)
@@ -1479,10 +1418,59 @@ int fobos_sdr_stop_sync(struct fobos_sdr_dev_t * dev)
         fobos_sdr_fx3_cmd(dev, FOBOS_SDR_CMD, CMD_STOP, 0);
         free(dev->rx_sync_buf);
         dev->rx_sync_buf = NULL;
-        free(dev->rx_buff);
-        dev->rx_buff = NULL;
         dev->rx_sync_started = 0;
     }
+    return result;
+}
+//==============================================================================
+int fobos_sdr_read_firmware(struct fobos_sdr_dev_t* dev, const char * file_name, int verbose)
+{
+    int result = fobos_sdr_check(dev);
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%s)\n", __FUNCTION__, file_name);
+#endif // FOBOS_PRINT_DEBUG
+    if (result != FOBOS_ERR_OK)
+    {
+        return result;
+    }
+    if (dev->rx_sync_started || dev->rx_async_status != FOBOS_IDDLE)
+    {
+        return FOBOS_ERR_UNSUPPORTED;
+    }
+    FILE * f = fopen(file_name, "wb");
+    if (f == 0)
+    {
+        return FOBOS_ERR_UNSUPPORTED;
+    }
+    result = 0;
+    size_t xx_size = 1024;
+    size_t xx_count = 192;
+    uint8_t * xx_data = malloc(xx_size);
+    uint16_t xsize;
+    uint8_t req_code = 0xEC;
+    if (verbose)
+    {
+        printf_internal("reading a firmware");
+    }
+    for (size_t i = 0; i < xx_count; i++)
+    {
+        if (verbose)
+        {
+            printf_internal(".");
+        }
+        xsize = libusb_control_transfer(dev->libusb_devh, CTRLI, req_code, 0, i, xx_data, xx_size, CTRL_TIMEOUT);
+        if (xsize != xx_size)
+        {
+            result = FOBOS_ERR_CONTROL;
+        }
+        fwrite(xx_data, xx_size, 1, f);
+    }
+    fclose(f);
+    if (verbose)
+    {
+        printf_internal("done.\n");
+    }
+    free(xx_data);
     return result;
 }
 //==============================================================================
@@ -1548,54 +1536,49 @@ int fobos_sdr_write_firmware(struct fobos_sdr_dev_t* dev, const char * file_name
     return result;
 }
 //==============================================================================
-int fobos_sdr_read_firmware(struct fobos_sdr_dev_t* dev, const char * file_name, int verbose)
+int fobos_sdr_read_user(struct fobos_sdr_dev_t * dev, void * data, int size)
 {
     int result = fobos_sdr_check(dev);
 #ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s(%s)\n", __FUNCTION__, file_name);
+    printf_internal("%s(%p, %d)\n", __FUNCTION__, file_name, data, size);
 #endif // FOBOS_PRINT_DEBUG
     if (result != FOBOS_ERR_OK)
     {
         return result;
     }
-    if (dev->rx_sync_started || dev->rx_async_status != FOBOS_IDDLE)
+    if (size > FOBOS_USER_DATA_SIZE)
     {
-        return FOBOS_ERR_UNSUPPORTED;
+        return FOBOS_ERR_BAD_PARAM;
     }
-    FILE * f = fopen(file_name, "wb");
-    if (f == 0)
+    uint8_t req_code = 0xE3;
+    uint16_t xsize = libusb_control_transfer(dev->libusb_devh, CTRLI, req_code, 0, 0, data, size, CTRL_TIMEOUT);
+    if (xsize != size)
     {
-        return FOBOS_ERR_UNSUPPORTED;
+        result = FOBOS_ERR_LIBUSB;
     }
-    result = 0;
-    size_t xx_size = 1024;
-    size_t xx_count = 160;
-    uint8_t * xx_data = malloc(xx_size);
-    uint16_t xsize;
-    uint8_t req_code = 0xEC;
-    if (verbose)
+    return result;
+}
+//==============================================================================
+int fobos_sdr_write_user(struct fobos_sdr_dev_t * dev, void * data, int size)
+{
+    int result = fobos_sdr_check(dev);
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%p, %d)\n", __FUNCTION__, file_name, data, size);
+#endif // FOBOS_PRINT_DEBUG
+    if (result != FOBOS_ERR_OK)
     {
-        printf_internal("reading a firmware");
+        return result;
     }
-    for (size_t i = 0; i < xx_count; i++)
+    if (size > FOBOS_USER_DATA_SIZE)
     {
-        if (verbose)
-        {
-            printf_internal(".");
-        }
-        xsize = libusb_control_transfer(dev->libusb_devh, CTRLI, req_code, 0, i, xx_data, xx_size, CTRL_TIMEOUT);
-        if (xsize != xx_size)
-        {
-            result = FOBOS_ERR_CONTROL;
-        }
-        fwrite(xx_data, xx_size, 1, f);
+        return FOBOS_ERR_BAD_PARAM;
     }
-    fclose(f);
-    if (verbose)
+    uint8_t req_code = 0xE4;
+    uint16_t xsize = libusb_control_transfer(dev->libusb_devh, CTRLO, req_code, 0, 0, data, size, CTRL_TIMEOUT);
+    if (xsize != size)
     {
-        printf_internal("done.\n");
+        result = FOBOS_ERR_LIBUSB;
     }
-    free(xx_data);
     return result;
 }
 //==============================================================================

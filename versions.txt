@@ -1,4 +1,8 @@
-v.3.1.1 (beta)
+v.3.3.0
+
+- hw rev.4.x.x support
+
+v.3.2.0
 
 - new software DC filter
 

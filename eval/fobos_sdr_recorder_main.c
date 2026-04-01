@@ -40,22 +40,23 @@ void read_samples_callback(float *buf, uint32_t buf_length, struct fobos_sdr_dev
     }
 }
 //==============================================================================
+#define INFO_SIZE       64
 //==============================================================================
 void test_recorder(void)
 {
     struct fobos_sdr_dev_t* dev = NULL;
     int result = 0;
-    char lib_version[32];
-    char drv_version[32];
+    char lib_version[INFO_SIZE];
+    char drv_version[INFO_SIZE];
     char serials[256] = {0};
 
     int index = 0; // the device index to open
 
-    char hw_revision[32];
-    char fw_version[32];
-    char manufacturer[32];
-    char product[32];
-    char serial[32];
+    char hw_revision[INFO_SIZE];
+    char fw_version[INFO_SIZE];
+    char manufacturer[INFO_SIZE];
+    char product[INFO_SIZE];
+    char serial[INFO_SIZE];
 
     fobos_sdr_get_api_info(lib_version, drv_version);
 
