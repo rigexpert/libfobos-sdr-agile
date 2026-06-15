@@ -66,7 +66,6 @@ void read_samples_callback(float *buf, uint32_t buf_length, struct fobos_sdr_dev
         else
         {
             // select different file for each channel to write to
-            // wav = scan->wavs + channel
             wav = scan->wavs[channel];
         }
     }
