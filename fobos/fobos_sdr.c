@@ -28,7 +28,6 @@
 #pragma comment(lib, "libusb-1.0.lib")                                             
 #define printf_internal _cprintf
 #else
-#include <libusb-1.0/libusb.h>
 #include <unistd.h>
 #endif
 #ifndef printf_internal
