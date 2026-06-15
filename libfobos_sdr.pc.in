@@ -3,9 +3,9 @@ exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@
 
-Name: RigExpert Fobos SDR Library
+Name: RigExpert Fobos SDR Agile Library
 Description: C Utility Library
 Version: @LIBVER@
-Cflags: -I${includedir}/ @LIBFOBOS_PC_CFLAGS@
-Libs: -L${libdir} -lfobos
-Libs.private: -lusb-1.0 @LIBFOBOS_PC_LIBS@
+Cflags: -I${includedir}/ @LIBFOBOS_SDR_PC_CFLAGS@
+Libs: -L${libdir} -lfobos_sdr
+Libs.private: -lusb-1.0 @LIBFOBOS_SDR_PC_LIBS@
