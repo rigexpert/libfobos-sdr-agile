@@ -80,12 +80,12 @@ jobs:
     - name: Test POSIX
       if: ${{ !startsWith(matrix.toolchain.name, 'MSVC') }}
       run: |
-        build/fobos_devinfo
+        build/fobos_sdr_devinfo
 
     - name: Test MSVC
       if: startsWith(matrix.toolchain.name, 'MSVC')
       run: |
-        build/Release/fobos_devinfo.exe
+        build/Release/fobos_sdr_devinfo.exe
 
     - name: List Build Directory
       if: always()
