@@ -400,6 +400,7 @@ int fobos_sdr_open(struct fobos_sdr_dev_t ** out_dev, uint32_t index)
                     fobos_sdr_set_frequency(dev, 100E6);
                     fobos_sdr_set_samplerate(dev, 25000000.0);
                     fobos_sdr_set_auto_bandwidth(dev, 0.9);
+                    libusb_free_device_list(dev_list, 1);
                     return FOBOS_ERR_OK;
                 }
             }
