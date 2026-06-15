@@ -47,36 +47,51 @@ endif(NOT CMAKE_BUILD_TYPE)
 ########################################################################
 # Compiler specific setup
 ########################################################################
-if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
-    ADD_DEFINITIONS(-Wall)
-    ADD_DEFINITIONS(-Wextra)
-    ADD_DEFINITIONS(-Wno-unused-parameter)
-    ADD_DEFINITIONS(-Wno-unused)
-    ADD_DEFINITIONS(-Wsign-compare)
-    ADD_DEFINITIONS(-ansi)
-elseif(MSVC14 OR MSVC14)
-    ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS)
-    ADD_DEFINITIONS(-D_TIMESPEC_DEFINED)
+if(MSVC)
+    add_definitions(
+        -D_CRT_SECURE_NO_WARNINGS
+        -D_TIMESPEC_DEFINED)
+else()
+    add_compile_options(
+        -Wall
+        -Wextra
+        -Wno-unused-parameter
+        -Wno-unused
+        -Wsign-compare
+        -ansi)
 endif()
 ########################################################################
 
 ########################################################################
 # Find build dependencies
 ########################################################################
-find_package(PkgConfig)
-if(PKG_CONFIG_FOUND)
-    pkg_check_modules(LIBUSB libusb-1.0 IMPORTED_TARGET)
-    if(LIBUSB_LINK_LIBRARIES)
-        set(LIBUSB_LIBRARIES "${LIBUSB_LINK_LIBRARIES}")
+if(NOT DEFINED LIBUSB_INCLUDE_DIRS OR NOT DEFINED LIBUSB_LIBRARIES)
+    find_package(PkgConfig)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(LIBUSB libusb-1.0 IMPORTED_TARGET)
+        if(NOT LIBUSB_FOUND)
+            message(FATAL_ERROR "LibUSB 1.0 required")
+        else()
+            set(LIBUSB_LIBRARIES "${LIBUSB_LINK_LIBRARIES}")
+        endif()
+    else()
+        set(LIBUSB_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/libusb/include 
+                                ${CMAKE_SOURCE_DIR}/libusb/include/libusb-1.0)
+        if(MSVC)
+            if (CMAKE_VS_PLATFORM_NAME STREQUAL Win32)
+                set(LIBUSB_LIBRARIES ${CMAKE_SOURCE_DIR}/libusb/MS32/dll)
+            endif()
+            if (CMAKE_VS_PLATFORM_NAME STREQUAL x64)
+                set(LIBUSB_LIBRARIES ${CMAKE_SOURCE_DIR}/libusb/MS64/dll)
+            endif()
+        elseif(MINGW)
+            if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+                set(LIBUSB_LIBRARIES ${CMAKE_SOURCE_DIR}/libusb/MinGW32/dll)
+            else()
+                set(LIBUSB_LIBRARIES ${CMAKE_SOURCE_DIR}/libusb/MinGW64/dll)
+            endif()
+        endif()
     endif()
-else()
-if (CMAKE_VS_PLATFORM_NAME STREQUAL Win32)
-	set(LIBUSB_LIBRARIES ${CMAKE_SOURCE_DIR}/libusb/MS32/dll)
-endif()
-if (CMAKE_VS_PLATFORM_NAME STREQUAL x64)
-    set(LIBUSB_LIBRARIES ${CMAKE_SOURCE_DIR}/libusb/MS64/dll)
-endif()
-    set(LIBUSB_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/libusb/include)
 endif()
 if(PKG_CONFIG_FOUND AND NOT LIBUSB_FOUND)
     message(FATAL_ERROR "LibUSB 1.0 required")
@@ -86,49 +101,51 @@ endif()
 ########################################################################
 # Install udev rules
 ########################################################################
-install(
-    FILES fobos-sdr.rules
-    DESTINATION "/etc/udev/rules.d"
-    COMPONENT "udev"
-    )
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    install(
+        FILES fobos-sdr.rules
+        DESTINATION "/etc/udev/rules.d"
+        COMPONENT "udev")
+endif()
 ########################################################################
 
 ########################################################################
 # Print Summary
 ########################################################################
-message(>>> "Build: " ${CMAKE_BUILD_TYPE})
-message(>>> "OS: " ${CMAKE_SYSTEM_NAME})
-message(>>> "VS Platform: " ${CMAKE_VS_PLATFORM_NAME})
-message(>>> "LIBUSB_LIBRARIES: " ${LIBUSB_LIBRARIES})
+message(>>> "Build:               " ${CMAKE_BUILD_TYPE})
+message(>>> "OS:                  " ${CMAKE_SYSTEM_NAME})
+message(>>> "VS Platform:         " ${CMAKE_VS_PLATFORM_NAME})
+message(>>> "LIBUSB_LIBRARIES:    " ${LIBUSB_LIBRARIES})
 message(>>> "LIBUSB_INCLUDE_DIRS: " ${LIBUSB_INCLUDE_DIRS})
-message(>>> "PROJECT_BINARY_DIR: " ${PROJECT_BINARY_DIR})
-
+message(>>> "PROJECT_BINARY_DIR:  " ${PROJECT_BINARY_DIR})
 ########################################################################
 # Fobos SDR (agile) library
 ########################################################################
 add_library(libfobos_sdr SHARED fobos/fobos_sdr.c)
 
-target_compile_options(libfobos_sdr PUBLIC -std=c99)
-
 if(MSVC)
-target_compile_options(libfobos_sdr PUBLIC "/MT")
-ADD_CUSTOM_COMMAND(TARGET libfobos_sdr
-          POST_BUILD
+    target_link_directories(libfobos_sdr PRIVATE ${LIBUSB_LIBRARIES})    
+    target_compile_options(libfobos_sdr PUBLIC "/MT")
+    add_custom_command(TARGET libfobos_sdr
+        POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/Debug
-          COMMAND ${CMAKE_COMMAND} -E copy ${LIBUSB_LIBRARIES}/libusb-1.0.dll ${PROJECT_BINARY_DIR}/Debug
-)
-ADD_CUSTOM_COMMAND(TARGET libfobos_sdr
-          POST_BUILD
-          COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/Release
-          COMMAND ${CMAKE_COMMAND} -E copy ${LIBUSB_LIBRARIES}/libusb-1.0.dll ${PROJECT_BINARY_DIR}/Release
-)
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LIBUSB_LIBRARIES}/libusb-1.0.dll ${PROJECT_BINARY_DIR}/Debug
+    )
+    add_custom_command(TARGET libfobos_sdr
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/Release
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LIBUSB_LIBRARIES}/libusb-1.0.dll ${PROJECT_BINARY_DIR}/Release
+    )
+elseif(MINGW)
+    target_link_directories(libfobos_sdr PRIVATE ${LIBUSB_LIBRARIES})    
+    target_link_libraries(libfobos_sdr PRIVATE usb-1.0)    
+    add_custom_command(TARGET libfobos_sdr
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LIBUSB_LIBRARIES}/libusb-1.0.dll ${PROJECT_BINARY_DIR}
+    )
 else()
-endif()
-
-if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
-    target_link_libraries(libfobos_sdr PRIVATE ${LIBUSB_LIBRARIES})
-else()
-    target_link_directories(libfobos_sdr PRIVATE ${LIBUSB_LIBRARIES})
+    target_link_libraries(libfobos_sdr PRIVATE ${LIBUSB_LIBRARIES})    
+    target_compile_options(libfobos_sdr PUBLIC -std=c99)
 endif()
 
 target_include_directories(libfobos_sdr PUBLIC
@@ -209,19 +226,17 @@ add_custom_target(uninstall
 ########################################################################
 add_executable(fobos_sdr_devinfo
     eval/fobos_sdr_devinfo_main.c)
-
-target_compile_options(fobos_sdr_devinfo PUBLIC -std=c99)
-
 target_link_libraries(fobos_sdr_devinfo PRIVATE libfobos_sdr)
-
-if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
-	target_link_libraries(fobos_sdr_devinfo PRIVATE ${LIBUSB_LIBRARIES})
+if(MSVC)
+    target_link_directories(fobos_sdr_devinfo PRIVATE ${LIBUSB_LIBRARIES})
+    target_compile_options(libfobos_sdr PUBLIC "/MT")
+elseif(MINGW)    
+    target_link_libraries(fobos_sdr_devinfo PRIVATE ${LIBUSB_LIBRARIES})	
 else()
-	target_link_directories(fobos_sdr_devinfo PRIVATE ${LIBUSB_LIBRARIES})
+    target_link_libraries(fobos_sdr_devinfo PRIVATE ${LIBUSB_LIBRARIES})	
+    target_compile_options(fobos_sdr_devinfo PUBLIC -std=c99)
 endif()
-
 target_include_directories(fobos_sdr_devinfo PRIVATE ${CMAKE_SOURCE_DIR})
-
 target_include_directories(fobos_sdr_devinfo PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
 ########################################################################
 
@@ -231,19 +246,17 @@ target_include_directories(fobos_sdr_devinfo PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
 add_executable(fobos_sdr_recorder 
     eval/fobos_sdr_recorder_main.c 
     wav/wav_file.c)
-
-target_compile_options(fobos_sdr_recorder PUBLIC -std=c99)
-
 target_link_libraries(fobos_sdr_recorder PRIVATE libfobos_sdr)
-
-if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
-    target_link_libraries(fobos_sdr_recorder PRIVATE ${LIBUSB_LIBRARIES})
-else()
+if(MSVC)
     target_link_directories(fobos_sdr_recorder PRIVATE ${LIBUSB_LIBRARIES})
+    target_compile_options(fobos_sdr_recorder PUBLIC "/MT")
+elseif(MINGW)    
+    target_link_libraries(fobos_sdr_recorder PRIVATE ${LIBUSB_LIBRARIES})	
+else()
+    target_link_libraries(fobos_sdr_recorder PRIVATE ${LIBUSB_LIBRARIES})	
+    target_compile_options(fobos_sdr_recorder PUBLIC -std=c99)
 endif()
-
 target_include_directories(fobos_sdr_recorder PRIVATE ${CMAKE_SOURCE_DIR})
-
 target_include_directories(fobos_sdr_recorder PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
 ########################################################################
 
@@ -253,19 +266,17 @@ target_include_directories(fobos_sdr_recorder PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
 add_executable(fobos_sdr_scanner 
     eval/fobos_sdr_scanner_main.c 
     wav/wav_file.c)
-
-target_compile_options(fobos_sdr_scanner PUBLIC -std=c99)
-
 target_link_libraries(fobos_sdr_scanner PRIVATE libfobos_sdr)
-
-if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
-    target_link_libraries(fobos_sdr_scanner PRIVATE ${LIBUSB_LIBRARIES})
-else()
+if(MSVC)
     target_link_directories(fobos_sdr_scanner PRIVATE ${LIBUSB_LIBRARIES})
+    target_compile_options(fobos_sdr_scanner PUBLIC "/MT")
+elseif(MINGW)    
+    target_link_libraries(fobos_sdr_scanner PRIVATE ${LIBUSB_LIBRARIES})	
+else()
+    target_link_libraries(fobos_sdr_scanner PRIVATE ${LIBUSB_LIBRARIES})	
+    target_compile_options(fobos_sdr_scanner PUBLIC -std=c99)
 endif()
-
 target_include_directories(fobos_sdr_scanner PRIVATE ${CMAKE_SOURCE_DIR})
-
 target_include_directories(fobos_sdr_scanner PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
 ########################################################################
 
@@ -273,21 +284,18 @@ target_include_directories(fobos_sdr_scanner PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
 # Create executable fobos_sdr_fwloader
 ########################################################################
 add_executable(fobos_sdr_fwloader 
-    eval/fobos_sdr_fwloader_main.c 
-    wav/wav_file.c)
-
-target_compile_options(fobos_sdr_fwloader PUBLIC -std=c99)
-
+    eval/fobos_sdr_fwloader_main.c)
 target_link_libraries(fobos_sdr_fwloader PRIVATE libfobos_sdr)
-
-if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
-    target_link_libraries(fobos_sdr_fwloader PRIVATE ${LIBUSB_LIBRARIES})
-else()
+if(MSVC)
     target_link_directories(fobos_sdr_fwloader PRIVATE ${LIBUSB_LIBRARIES})
+    target_compile_options(fobos_sdr_fwloader PUBLIC "/MT")
+elseif(MINGW)    
+    target_link_libraries(fobos_sdr_fwloader PRIVATE ${LIBUSB_LIBRARIES})	
+else()
+    target_link_libraries(fobos_sdr_fwloader PRIVATE ${LIBUSB_LIBRARIES})	
+    target_compile_options(fobos_sdr_fwloader PUBLIC -std=c99)
 endif()
-
 target_include_directories(fobos_sdr_fwloader PRIVATE ${CMAKE_SOURCE_DIR})
-
 target_include_directories(fobos_sdr_fwloader PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
 ########################################################################
 

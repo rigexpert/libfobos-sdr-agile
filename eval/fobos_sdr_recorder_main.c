@@ -3,6 +3,7 @@
 //  V.T.
 //  LGPL-2.1+
 //  2024.12.07
+//  2026.06.15 - FOBOS_INFO_LEN
 //==============================================================================
 #include <stdio.h>
 #ifdef _WIN32
@@ -40,23 +41,21 @@ void read_samples_callback(float *buf, uint32_t buf_length, struct fobos_sdr_dev
     }
 }
 //==============================================================================
-#define INFO_SIZE       64
-//==============================================================================
 void test_recorder(void)
 {
     struct fobos_sdr_dev_t* dev = NULL;
     int result = 0;
-    char lib_version[INFO_SIZE];
-    char drv_version[INFO_SIZE];
+    char lib_version[FOBOS_INFO_LEN];
+    char drv_version[FOBOS_INFO_LEN];
     char serials[256] = {0};
 
     int index = 0; // the device index to open
 
-    char hw_revision[INFO_SIZE];
-    char fw_version[INFO_SIZE];
-    char manufacturer[INFO_SIZE];
-    char product[INFO_SIZE];
-    char serial[INFO_SIZE];
+    char hw_revision[FOBOS_INFO_LEN];
+    char fw_version[FOBOS_INFO_LEN];
+    char manufacturer[FOBOS_INFO_LEN];
+    char product[FOBOS_INFO_LEN];
+    char serial[FOBOS_INFO_LEN];
 
     fobos_sdr_get_api_info(lib_version, drv_version);
 
@@ -193,7 +192,7 @@ int main(int argc, char** argv)
     {
         printf("arg[%d]=%s\n", i, argv[i]);
     }
-    printf("machine: x%ld\n", sizeof(void*)*8);
+    printf("machine: x%zu\n", sizeof(void*)*8);
 
     test_recorder();
 

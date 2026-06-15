@@ -3,6 +3,7 @@
 //  V.T.
 //  LGPL-2.1+
 //  2024.12.07
+//  2026.06.15 - FOBOS_INFO_LEN
 //==============================================================================
 #include <stdio.h>
 #include <string.h>
@@ -12,17 +13,17 @@ void get_devinfo()
 {
     struct fobos_sdr_dev_t * dev = NULL;
     int result = 0;
-    char lib_version[64];
-    char drv_version[64];
+    char lib_version[FOBOS_INFO_LEN];
+    char drv_version[FOBOS_INFO_LEN];
     char serials[256] = {0};
 
     int index = 0;
 
-    char hw_revision[64];
-    char fw_version[64];
-    char manufacturer[64];
-    char product[64];
-    char serial[64];
+    char hw_revision[FOBOS_INFO_LEN];
+    char fw_version[FOBOS_INFO_LEN];
+    char manufacturer[FOBOS_INFO_LEN];
+    char product[FOBOS_INFO_LEN];
+    char serial[FOBOS_INFO_LEN];
     
     fobos_sdr_get_api_info(lib_version, drv_version);
 

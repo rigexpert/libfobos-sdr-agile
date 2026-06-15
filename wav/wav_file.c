@@ -3,9 +3,18 @@
 // pure c implementation
 // 2024.02.10
 // V.V.
+// 2026.06.15 - int64 i/o
 //==============================================================================
 #include <string.h>
 #include "wav_file.h"
+//==============================================================================
+#ifdef WIN32
+#define file_seek(stream, offs, origin) _fseeki64(stream, offs, origin);
+#define file_tell(stream) _ftelli64(stream);
+#else
+#define file_seek(stream, offs, origin) fseek(stream, (long)offs, (int)origin);
+#define file_tell(stream) ftell(stream);
+#endif 
 //==============================================================================
 struct wav_file_t * wav_file_create(void)
 {
@@ -88,12 +97,12 @@ int wav_file_write_header(struct wav_file_t * ctx)
     }
     uint16_t b16;
     uint32_t b32;
-    size_t pos = ftell(ctx->file);
-    fseek(ctx->file, 0, SEEK_SET);
+    int64_t pos = file_tell(ctx->file);
+    file_seek(ctx->file, 0, SEEK_SET);
     //=============================================================================
     char ChunkID[4] = { 'R', 'I', 'F', 'F' };
     fwrite(ChunkID, sizeof(ChunkID), 1, ctx->file);// 0..3 (4 bytes) - "RIFF"
-    if (ctx->file_size > INT32_MAX - 8)
+    if (ctx->file_size > (int64_t)(INT32_MAX - 8))
     {
         b32 = 0;
     }
@@ -101,7 +110,7 @@ int wav_file_write_header(struct wav_file_t * ctx)
     {
         if (ctx->file_size > 8)
         {
-            b32 = ctx->file_size - 8;
+            b32 = (uint32_t)ctx->file_size - 8;
         }
         else
         {
@@ -131,24 +140,24 @@ int wav_file_write_header(struct wav_file_t * ctx)
     fwrite(&b16, sizeof(b16), 1, ctx->file);// 34..35 (2 bytes) - BitsPerSample
     char SubChunk2ID[4] = { 'd', 'a', 't', 'a' };
     fwrite(SubChunk2ID, sizeof(SubChunk2ID), 1, ctx->file);// 36..39 (4 bytes) - "data"
-    long DataSize = ctx->sample_groups_count * BytesPerSampleGorup;
+    int64_t DataSize = ctx->sample_groups_count * (int64_t)BytesPerSampleGorup;
     if (DataSize > INT32_MAX)
     {
         b32 = INT32_MAX;
     }
     else
     {
-        b32 = DataSize;
+        b32 = (uint32_t)DataSize;
     }
     fwrite(&b32, sizeof(b32), 1, ctx->file); // 40..43 (4 bytes) - ChunkSize
-    ctx->data_start = ftell(ctx->file);
+    ctx->data_start = file_tell(ctx->file);
     if (pos < ctx->data_start)
     {
-        fseek(ctx->file, ctx->data_start, SEEK_SET);
+        file_seek(ctx->file, ctx->data_start, SEEK_SET);
     }
     else
     {
-        fseek(ctx->file, pos, SEEK_SET);
+        file_seek(ctx->file, pos, SEEK_SET);
     }
     //==========================================================================
     return 0;
@@ -162,12 +171,12 @@ int wav_file_read_header(struct wav_file_t * ctx)
     }
     uint16_t b16;
     uint32_t b32;
-    size_t rd = 0;
+    int64_t rd = 0;
     char ChunkID[4] = { 0,0,0,0 };
-    long prev_pos = ftell(ctx->file);
-    fseek(ctx->file, 0, SEEK_END);
-    ctx->file_size = ftell(ctx->file);
-    fseek(ctx->file, 0, SEEK_SET);
+    int64_t prev_pos = file_tell(ctx->file);
+    file_seek(ctx->file, 0, SEEK_END);
+    ctx->file_size = file_tell(ctx->file);
+    file_seek(ctx->file, 0, SEEK_SET);
     rd += fread(ChunkID, 4, 1, ctx->file);
     int result = 0;
     if ((ChunkID[0] == 'R') && (ChunkID[1] == 'I') && (ChunkID[2] == 'F') && (ChunkID[3] == 'F'))
@@ -178,7 +187,7 @@ int wav_file_read_header(struct wav_file_t * ctx)
         {
             while (1)
             {
-                size_t chunc_start = ftell(ctx->file);
+                int64_t chunc_start = file_tell(ctx->file);
 
                 rd += fread(ChunkID, 4, 1, ctx->file);
                 rd += fread(&b32, sizeof(b32), 1, ctx->file);
@@ -213,7 +222,7 @@ int wav_file_read_header(struct wav_file_t * ctx)
                 //
                 if ((ChunkID[0] == 'd') && (ChunkID[1] == 'a') && (ChunkID[2] == 't') && (ChunkID[3] == 'a'))
                 {
-                    ctx->data_start = ftell(ctx->file);
+                    ctx->data_start = file_tell(ctx->file);
                     break;
                 }
                 chunc_start = chunc_start + ChunkSize + 8; // Next Chunk
@@ -221,7 +230,7 @@ int wav_file_read_header(struct wav_file_t * ctx)
                 {
                     break;
                 }
-                fseek(ctx->file, chunc_start, SEEK_SET);
+                file_seek(ctx->file, chunc_start, SEEK_SET);
             }
             if (ctx->data_start == 0)
             {
@@ -244,7 +253,7 @@ int wav_file_read_header(struct wav_file_t * ctx)
     ctx->samples_count = ctx->sample_groups_count * ctx->channels_count;
     if (prev_pos)
     {
-        fseek(ctx->file, prev_pos, SEEK_SET);
+        file_seek(ctx->file, prev_pos, SEEK_SET);
     }
     if (rd == 0)
     {
@@ -258,8 +267,8 @@ size_t wav_file_write_data(struct wav_file_t * ctx, void * data, size_t size)
     if (ctx->file)
     {
         size_t wrote = fwrite(data, size, 1, ctx->file) * size;
-        ctx->file_size = ftell(ctx->file);
-        ctx->samples_count += (size / (size_t)ctx->bytes_per_sample);
+        ctx->file_size = file_tell(ctx->file);
+        ctx->samples_count = (ctx->file_size / (size_t)ctx->bytes_per_sample);
         ctx->sample_groups_count = ctx->samples_count * ctx->channels_count;
         return wrote;
     }
@@ -271,12 +280,11 @@ size_t wav_file_write_data(struct wav_file_t * ctx, void * data, size_t size)
 //==============================================================================
 size_t wav_file_read_data(struct wav_file_t * ctx, void * data, size_t size)
 {
-    int Result = 0;
     if (ctx->file)
     {
-        Result = fread(data, 1, size, ctx->file);
+        return fread(data, 1, size, ctx->file);
     }
-    return Result;
+    return 0;
 }
 //==============================================================================
 size_t wav_file_samples_to_data(struct wav_file_t * ctx, const float * samples, size_t count, char * data, size_t * size)

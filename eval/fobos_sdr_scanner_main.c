@@ -5,14 +5,15 @@
 //  LGPL-2.1+
 //  2024.12.07
 //  2026.03.12
+//  2026.06.15 - fixed wavs[channel]
+//  2026.06.15 - FOBOS_INFO_LEN
 //==============================================================================
 #include <stdio.h>
 #ifdef _WIN32
 #include <Windows.h>
 #endif
 #include <string.h>
-//#include <fobos_sdr.h>
-#include <fobos/fobos_sdr.h>
+#include <fobos_sdr.h>
 #include <wav/wav_file.h>
 //==============================================================================
 typedef struct scan_ctx_t
@@ -29,13 +30,15 @@ void read_samples_callback(float *buf, uint32_t buf_length, struct fobos_sdr_dev
 {
     struct scan_ctx_t * scan = (struct scan_ctx_t *)user;
     scan->buff_count++;
-
+    
+    // simple activity indicatioin
     if (scan->buff_count % 256 == 0)
     {
         printf("+");
         fflush(stdout);
     }
     
+    // check if we need to get scanning done
     if (scan->buff_count >= scan->max_buff_count)
     {
         printf("canceling...");
@@ -62,8 +65,9 @@ void read_samples_callback(float *buf, uint32_t buf_length, struct fobos_sdr_dev
         }
         else
         {
-            // select the scan->wavs[channel] to write to
-            wav = scan->wavs + channel;
+            // select different file for each channel to write to
+            // wav = scan->wavs + channel
+            wav = scan->wavs[channel];
         }
     }
     else
@@ -92,17 +96,17 @@ void test_scanner(void)
 {
     struct fobos_sdr_dev_t* dev = NULL;
     int result = 0;
-    char lib_version[64];
-    char drv_version[64];
+    char lib_version[FOBOS_INFO_LEN];
+    char drv_version[FOBOS_INFO_LEN];
     char serials[256] = {0};
 
     int index = 0; // the device index to open
 
-    char hw_revision[64];
-    char fw_version[64];
-    char manufacturer[64];
-    char product[64];
-    char serial[64];
+    char hw_revision[FOBOS_INFO_LEN];
+    char fw_version[FOBOS_INFO_LEN];
+    char manufacturer[FOBOS_INFO_LEN];
+    char product[FOBOS_INFO_LEN];
+    char serial[FOBOS_INFO_LEN];
 
     fobos_sdr_get_api_info(lib_version, drv_version);
 
@@ -330,7 +334,7 @@ int main(int argc, char** argv)
     {
         printf("arg[%d]=%s\n", i, argv[i]);
     }
-    printf("machine: x%ld\n", sizeof(void*)*8);
+    printf("machine: x%zu\n", sizeof(void*)*8);
 
     test_scanner();
 

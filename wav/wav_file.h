@@ -3,6 +3,7 @@
 // pure c implementation
 // 2024.02.10
 // V.V.
+// 2026.06.15 - int64 i/o
 //==============================================================================
 #ifndef __WAV_FILE_H__
 #define __WAV_FILE_H__
@@ -19,16 +20,16 @@ struct wav_file_t
     char file_name[MAX_PATH];
     char file_mode[3];
     int is_valid;
-    size_t file_size;
+    int64_t file_size;
+    int64_t samples_count;
+    int64_t sample_groups_count;
+    int64_t data_start;
     uint32_t audio_format;
     uint32_t channels_count;
     uint32_t sample_rate;
     uint32_t bytes_per_second;
     uint32_t bytes_per_sample;
     uint32_t bytes_per_sample_group;
-    uint32_t samples_count;
-    uint32_t sample_groups_count;
-    uint32_t data_start;
 };
 
 struct wav_file_t * wav_file_create(void);

@@ -1,6 +1,7 @@
 v.3.3.0
 
 - hw rev.4.x.x support
+- int64 wav file
 
 v.3.2.0
 
