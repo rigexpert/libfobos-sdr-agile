@@ -99,10 +99,10 @@ API_EXPORT int CALL_CONV fobos_sdr_is_scanning(struct fobos_sdr_dev_t * dev);
 // set rx direct sampling mode:  0 - disabled (default),  1 - enabled
 API_EXPORT int CALL_CONV fobos_sdr_set_direct_sampling(struct fobos_sdr_dev_t * dev, unsigned int enabled);
 
-// low noise amplifier 0..2
+// low noise amplifier 0..3 (0, 1: 0 dB, 2: +16dB, 3: +33dB)
 API_EXPORT int CALL_CONV fobos_sdr_set_lna_gain(struct fobos_sdr_dev_t * dev, unsigned int value);
 
-// variable gain amplifier 0..15
+// variable gain amplifier 0..31 (0..+62 db, 2dB step)
 API_EXPORT int CALL_CONV fobos_sdr_set_vga_gain(struct fobos_sdr_dev_t * dev, unsigned int value);
 
 // get available sample rate list or sample rate range
