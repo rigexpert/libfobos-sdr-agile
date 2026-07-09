@@ -1447,8 +1447,8 @@ int fobos_sdr_read_firmware(struct fobos_sdr_dev_t* dev, const char * file_name,
         return FOBOS_ERR_UNSUPPORTED;
     }
     result = 0;
-    uint16_t xx_size = 1024;
-    uint16_t xx_count = 192;
+    size_t xx_size = 1024;
+    size_t xx_count = 192;
     uint8_t * xx_data = malloc(xx_size);
     uint16_t xsize;
     uint8_t req_code = 0xEC;
@@ -1456,13 +1456,13 @@ int fobos_sdr_read_firmware(struct fobos_sdr_dev_t* dev, const char * file_name,
     {
         printf_internal("reading a firmware");
     }
-    for (uint16_t i = 0; i < xx_count; i++)
+    for (size_t i = 0; i < xx_count; i++)
     {
         if (verbose)
         {
             printf_internal(".");
         }
-        xsize = libusb_control_transfer(dev->libusb_devh, CTRLI, req_code, 0, i, xx_data, xx_size, CTRL_TIMEOUT);
+        xsize = libusb_control_transfer(dev->libusb_devh, CTRLI, req_code, 0, i, xx_data, (uint16_t)xx_size, CTRL_TIMEOUT);
         if (xsize != xx_size)
         {
             result = FOBOS_ERR_CONTROL;
@@ -1505,8 +1505,8 @@ int fobos_sdr_write_firmware(struct fobos_sdr_dev_t* dev, const char * file_name
         return FOBOS_ERR_UNSUPPORTED;
     }
     result = 0;
-    uint16_t xx_size = 1024;
-    uint16_t xx_count = (uint16_t)((file_size + xx_size - 1) / xx_size);
+    size_t xx_size = 1024;
+    size_t xx_count = (file_size + xx_size - 1) / xx_size;
     uint8_t * file_data = (uint8_t * )malloc(xx_count * xx_size);
     fseek(f, 0, SEEK_SET);
     size_t read = fread(file_data, file_size, 1, f);
@@ -1517,20 +1517,20 @@ int fobos_sdr_write_firmware(struct fobos_sdr_dev_t* dev, const char * file_name
         return FOBOS_ERR_UNSUPPORTED;
     }
     memset(file_data + file_size, 0, xx_count * xx_size - file_size);
-    uint16_t xsize;
+    size_t xsize;
     uint8_t req_code = 0xED;
     uint8_t * xx_data = file_data;
     if (verbose)
     {
         printf_internal("writing a firmware");
     }
-    for (uint16_t i = 0; i < xx_count; i++)
+    for (size_t i = 0; i < xx_count; i++)
     {
         if (verbose)
         {
             printf_internal(".");
         }
-        xsize = libusb_control_transfer(dev->libusb_devh, CTRLO, req_code, 0, i, xx_data, xx_size, CTRL_TIMEOUT);
+        xsize = libusb_control_transfer(dev->libusb_devh, CTRLO, req_code, 0, i, xx_data, (uint16_t)xx_size, CTRL_TIMEOUT);
         if (xsize != xx_size)
         {
             result = FOBOS_ERR_CONTROL;
