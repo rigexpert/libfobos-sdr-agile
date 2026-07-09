@@ -34,7 +34,7 @@
 #define printf_internal printf
 #endif // !printf_internal
 //==============================================================================
-#define FOBOS_SDR_PRINT_DEBUG
+//#define FOBOS_SDR_PRINT_DEBUG
 //==============================================================================
 #define LIB_VERSION "3.3.0 (agile)"
 #define DRV_VERSION "libusb"
