@@ -693,7 +693,7 @@ int fobos_sdr_set_auto_bandwidth(struct fobos_sdr_dev_t * dev, double value)
     {
         uint64_t val = (uint64_t)(value*1024.0);
         fobos_sdr_ctrl_out(dev, FOBOS_SDR_CMD, CMD_SET_AUTOBW, 0, (uint8_t*)&val, 8);
-        dev->rx_bandwidth = value;
+        dev->rx_auto_bandwidth = value;
     }
     return result;
 }
